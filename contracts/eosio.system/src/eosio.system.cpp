@@ -377,6 +377,10 @@ namespace eosiosystem {
       preactivate_feature( feature_digest );
    }
 
+   void system_contract::logsystemfee( const name& protocol, const asset& fee, const std::string& memo ) {
+      require_auth( get_self() );
+   }
+
    void system_contract::rmvproducer( const name& producer ) {
       require_auth( get_self() );
       auto prod = _producers.find( producer.value );

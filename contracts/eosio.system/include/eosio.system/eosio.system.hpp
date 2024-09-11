@@ -566,6 +566,31 @@ namespace eosiosystem {
    typedef eosio::multi_index< "genesis"_n, genesis_tokens >      genesis_balance_table;
    typedef eosio::multi_index< "genonce"_n, genesis_nonce >       genesis_nonce_table;
 
+   struct action_return_sellram {
+      name account;
+      asset quantity;
+      int64_t bytes_sold;
+      int64_t ram_bytes;
+      asset fee;
+   };
+
+   struct action_return_buyram {
+      name payer;
+      name receiver;
+      asset quantity;
+      int64_t bytes_purchased;
+      int64_t ram_bytes;
+      asset fee;
+   };
+
+   struct action_return_ramtransfer {
+      name from;
+      name to;
+      int64_t bytes;
+      int64_t from_ram_bytes;
+      int64_t to_ram_bytes;
+   };
+
    struct powerup_config_resource {
       std::optional<int64_t>        current_weight_ratio;   // Immediately set weight_ratio to this amount. 1x = 10^15. 0.01x = 10^13.
                                                             //    Do not specify to preserve the existing setting or use the default;
@@ -821,6 +846,16 @@ namespace eosiosystem {
          [[eosio::action]]
          void activate( const eosio::checksum256& feature_digest );
 
+         /**
+          * Logging for actions resulting in system fees.
+          *
+          * @param protocol - name of protocol fees were earned from.
+          * @param fee - the amount of fees collected by system.
+          * @param memo - (optional) the memo associated with the action.
+          */
+         [[eosio::action]]
+         void logsystemfee( const name& protocol, const asset& fee, const std::string& memo );
+
          // functions defined in delegate_bandwidth.cpp
 
          /**
@@ -893,7 +928,7 @@ namespace eosiosystem {
           * @param quant - the quantity of tokens to buy ram with.
           */
          [[eosio::action]]
-         void buyram( const name& payer, const name& receiver, const asset& quant );
+         action_return_buyram buyram( const name& payer, const name& receiver, const asset& quant );
 
          /**
           * Buy a specific amount of ram bytes action. Increases receiver's ram in quantity of bytes provided.
@@ -904,7 +939,18 @@ namespace eosiosystem {
           * @param bytes - the quantity of ram to buy specified in bytes.
           */
          [[eosio::action]]
-         void buyrambytes( const name& payer, const name& receiver, uint32_t bytes );
+         action_return_buyram buyrambytes( const name& payer, const name& receiver, uint32_t bytes );
+
+         /**
+          * The buyramself action is designed to enhance the permission security by allowing an account to purchase RAM exclusively for itself.
+          * This action prevents the potential risk associated with standard actions like buyram and buyrambytes,
+          * which can transfer EOS tokens out of the account, acting as a proxy for eosio.token::transfer.
+          *
+          * @param account - the ram buyer and receiver,
+          * @param quant - the quantity of tokens to buy ram with.
+          */
+         [[eosio::action]]
+         action_return_buyram buyramself( const name& account, const asset& quant );
 
          /**
           * Sell ram action, reduces quota by bytes and then performs an inline transfer of tokens
@@ -914,7 +960,74 @@ namespace eosiosystem {
           * @param bytes - the amount of ram to sell in bytes.
           */
          [[eosio::action]]
-         void sellram( const name& account, int64_t bytes );
+         action_return_sellram sellram( const name& account, int64_t bytes );
+
+         /**
+          * Logging for sellram action
+          *
+          * @param account - the ram seller,
+          * @param quantity - the quantity of tokens to sell ram with.
+          * @param bytes - the quantity of ram to sell specified in bytes.
+          * @param ram_bytes - the ram bytes held by account after the action.
+          * @param fee - the fee to be paid for the ram sold.
+          */
+         [[eosio::action]]
+         void logsellram( const name& account, const asset& quantity, int64_t bytes, int64_t ram_bytes, const asset& fee );
+
+         /**
+          * Logging for buyram & buyrambytes action
+          *
+          * @param payer - the ram buyer,
+          * @param receiver - the ram receiver,
+          * @param quantity - the quantity of tokens to buy ram with.
+          * @param bytes - the quantity of ram to buy specified in bytes.
+          * @param ram_bytes - the ram bytes held by receiver after the action.
+          * @param fee - the fee to be paid for the ram sold.
+          */
+         [[eosio::action]]
+         void logbuyram( const name& payer, const name& receiver, const asset& quantity, int64_t bytes, int64_t ram_bytes, const asset& fee );
+
+         /**
+          * Logging for ram changes
+          *
+          * @param owner - the ram owner account,
+          * @param bytes - the bytes balance change,
+          * @param ram_bytes - the ram bytes held by owner after the action.
+          */
+         [[eosio::action]]
+         void logramchange( const name& owner, int64_t bytes, int64_t ram_bytes );
+
+         /**
+          * Transfer ram action, reduces sender's quota by bytes and increase receiver's quota by bytes.
+          *
+          * @param from - the ram sender account,
+          * @param to - the ram receiver account,
+          * @param bytes - the amount of ram to transfer in bytes,
+          * @param memo - the memo string to accompany the transaction.
+          */
+         [[eosio::action]]
+         action_return_ramtransfer ramtransfer( const name& from, const name& to, int64_t bytes, const std::string& memo );
+
+         /**
+          * Burn ram action, reduces owner's quota by bytes.
+          *
+          * @param owner - the ram owner account,
+          * @param bytes - the amount of ram to be burned in bytes,
+          * @param memo - the memo string to accompany the transaction.
+          */
+         [[eosio::action]]
+         action_return_ramtransfer ramburn( const name& owner, int64_t bytes, const std::string& memo );
+
+         /**
+          * Buy RAM and immediately burn RAM.
+          * An inline transfer from payer to system contract of tokens will be executed.
+          *
+          * @param payer - the payer of buy RAM & burn.
+          * @param quantity - the quantity of tokens to buy RAM & burn with.
+          * @param memo - the memo string to accompany the transaction.
+          */
+         [[eosio::action]]
+         action_return_buyram buyramburn( const name& payer, const asset& quantity, const std::string& memo );
 
          /**
           * Refund action, this action is called after the delegation-period to claim all pending
@@ -1284,13 +1397,20 @@ namespace eosiosystem {
          using setacctnet_action = eosio::action_wrapper<"setacctnet"_n, &system_contract::setacctnet>;
          using setacctcpu_action = eosio::action_wrapper<"setacctcpu"_n, &system_contract::setacctcpu>;
          using activate_action = eosio::action_wrapper<"activate"_n, &system_contract::activate>;
+         using logsystemfee_action = eosio::action_wrapper<"logsystemfee"_n, &system_contract::logsystemfee>;
          using delegatebw_action = eosio::action_wrapper<"delegatebw"_n, &system_contract::delegatebw>;
          using removerefund_action = eosio::action_wrapper<"removerefund"_n, &system_contract::removerefund>;
          using claimgenesis_action = eosio::action_wrapper<"claimgenesis"_n, &system_contract::claimgenesis>;
          using undelegatebw_action = eosio::action_wrapper<"undelegatebw"_n, &system_contract::undelegatebw>;
          using buyram_action = eosio::action_wrapper<"buyram"_n, &system_contract::buyram>;
          using buyrambytes_action = eosio::action_wrapper<"buyrambytes"_n, &system_contract::buyrambytes>;
+         using logbuyram_action = eosio::action_wrapper<"logbuyram"_n, &system_contract::logbuyram>;
          using sellram_action = eosio::action_wrapper<"sellram"_n, &system_contract::sellram>;
+         using logsellram_action = eosio::action_wrapper<"logsellram"_n, &system_contract::logsellram>;
+         using logramchange_action = eosio::action_wrapper<"logramchange"_n, &system_contract::logramchange>;
+         using ramtransfer_action = eosio::action_wrapper<"ramtransfer"_n, &system_contract::ramtransfer>;
+         using ramburn_action = eosio::action_wrapper<"ramburn"_n, &system_contract::ramburn>;
+         using buyramburn_action = eosio::action_wrapper<"buyramburn"_n, &system_contract::buyramburn>;
          using refund_action = eosio::action_wrapper<"refund"_n, &system_contract::refund>;
          using regproducer_action = eosio::action_wrapper<"regproducer"_n, &system_contract::regproducer>;
          using regproducer2_action = eosio::action_wrapper<"regproducer2"_n, &system_contract::regproducer2>;
@@ -1363,6 +1483,10 @@ namespace eosiosystem {
          void change_genesis( name unstaker );
          bool has_genesis_balance( name owner );
          void update_voting_power( const name& voter, const asset& total_update );
+
+         void set_resource_ram_bytes_limits( const name& owner );
+         int64_t reduce_ram( const name& owner, int64_t bytes );
+         int64_t add_ram( const name& owner, int64_t bytes );
 
          // defined in voting.cpp
          void update_voter_votepay_share(const voters_table::const_iterator& voter_itr);
