@@ -8,7 +8,6 @@
 #include <sstream>
 #include <fc/log/logger.hpp>
 #include <eosio/chain/exceptions.hpp>
-#include <Runtime/Runtime.h>
 
 #include "eosio.system_tester.hpp"
 struct _abi_hash {
@@ -3334,7 +3333,7 @@ BOOST_FIXTURE_TEST_CASE(producers_upgrade_system_contract, eosio_system_tester) 
    {
       //prepare system contract with different hash (contract differs in one byte)
       auto code = contracts::system_wasm();
-      string msg = "producer votes must be unique and sorted";
+      string msg = "producer votes must be unique";
       auto it = std::search( code.begin(), code.end(), msg.begin(), msg.end() );
       BOOST_REQUIRE( it != code.end() );
       msg[0] = 'P';

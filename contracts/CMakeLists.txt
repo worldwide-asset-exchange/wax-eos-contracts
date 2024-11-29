@@ -10,8 +10,8 @@ option(SYSTEM_BLOCKCHAIN_PARAMETERS
 
 find_package(cdt)
 
-set(CDT_VERSION_MIN "3.0")
-set(CDT_VERSION_SOFT_MAX "3.0")
+set(CDT_VERSION_MIN "4.1")
+set(CDT_VERSION_SOFT_MAX "4.1")
 # set(CDT_VERSION_HARD_MAX "")
 
 # Check the version of CDT

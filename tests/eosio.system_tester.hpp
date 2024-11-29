@@ -17,9 +17,9 @@ using mvo = fc::mutable_variant_object;
 
 #ifndef TESTER
 #ifdef NON_VALIDATING_TEST
-#define TESTER tester
+#define TESTER tester_no_disable_deferred_trx
 #else
-#define TESTER validating_tester
+#define TESTER validating_tester_no_disable_deferred_trx
 #endif
 #endif
 
