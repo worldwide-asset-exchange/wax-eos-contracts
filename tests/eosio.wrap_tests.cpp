@@ -2,8 +2,6 @@
 #include <eosio/testing/tester.hpp>
 #include <eosio/chain/abi_serializer.hpp>
 
-#include <Runtime/Runtime.h>
-
 #include <fc/variant_object.hpp>
 
 #include "contracts.hpp"
@@ -19,7 +17,7 @@ using mvo = fc::mutable_variant_object;
 class eosio_wrap_tester : public tester {
 public:
 
-   eosio_wrap_tester() {
+   eosio_wrap_tester(): tester(setup_policy::full_except_do_not_disable_deferred_trx) {
       create_accounts( { "eosio.msig"_n, "prod1"_n, "prod2"_n, "prod3"_n, "prod4"_n, "prod5"_n, "alice"_n, "bob"_n, "carol"_n } );
       produce_block();
 
